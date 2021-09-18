@@ -2,11 +2,16 @@ mod game;
 mod image;
 use std::path::PathBuf;
 
-use distill::daemon::{init_logging, AssetDaemon};
+use distill::daemon::AssetDaemon;
 pub use game::Storage;
+use tracing_subscriber::filter::LevelFilter;
 
 fn main() {
-    init_logging().expect("failed to init logging");
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(LevelFilter::DEBUG)
+        .without_time()
+        .init();
+
     std::thread::spawn(move || {
         AssetDaemon::default()
             .with_importer(&["png"], crate::image::ImageImporter)

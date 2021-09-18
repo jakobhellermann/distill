@@ -5,10 +5,11 @@ mod storage;
 
 use std::path::PathBuf;
 
-use distill::daemon::{init_logging, AssetDaemon};
+use distill::daemon::{AssetDaemon};
 
 fn main() {
-    init_logging().expect("failed to init logging");
+    tracing_subscriber::fmt::init();
+
     std::thread::spawn(move || {
         AssetDaemon::default()
             .with_importer(&["png"], crate::image::ImageImporter)

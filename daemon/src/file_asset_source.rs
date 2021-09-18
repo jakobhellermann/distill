@@ -467,11 +467,20 @@ impl FileAssetSource {
                     // Resolve the path into asset with index 0, if it exists
                     assets.into_iter().next()
                 } else {
-                    tracing::error!(
-                        "Failed to resolve path {:?} at {:?}: could not find metadata for file",
-                        canon_path.to_string_lossy(),
-                        source_path.to_string_lossy(),
-                    );
+                    let canon_path = canon_path.to_string_lossy();
+                    let source_path = source_path.to_string_lossy();
+                    if canon_path != source_path {
+                        tracing::error!(
+                            "Failed to resolve path {:?} at {:?}: could not find metadata for file",
+                            canon_path,
+                            source_path,
+                        );
+                    } else {
+                        tracing::error!(
+                            "Failed to resolve path {:?}: could not find metadata for file",
+                            canon_path
+                        );
+                    }
                     None
                 }
             }
