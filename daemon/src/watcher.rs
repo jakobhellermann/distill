@@ -189,7 +189,7 @@ impl DirWatcher {
                     // By default, just proxy the event into the channel
                     Ok(maybe_event) => {
                         if let Some(evt) = maybe_event {
-                            log::debug!("File event: {:?}", evt);
+                            tracing::debug!("File event: {:?}", evt);
                             self.asset_tx.unbounded_send(evt).unwrap();
                         }
                     }
@@ -343,7 +343,7 @@ impl DirWatcher {
                 let metadata_result = match fs::metadata(&path) {
                     Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
                     Err(ref e) if e.kind() == io::ErrorKind::PermissionDenied => {
-                        log::warn!(
+                        tracing::warn!(
                             "Permission denied when fetching metadata for create event {:?}",
                             path,
                         );
@@ -375,7 +375,7 @@ impl DirWatcher {
                 match fs::metadata(&dest) {
                     Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
                     Err(ref e) if e.kind() == io::ErrorKind::PermissionDenied => {
-                        log::warn!(
+                        tracing::warn!(
                             "Permission denied when fetching metadata for rename event {:?}->{:?}",
                             src,
                             dest

@@ -14,7 +14,7 @@ pub enum Error {
     RonError(ron::Error),
     ErasedSerde(erased_serde::Error),
     MetaDeError(PathBuf, ron::Error),
-    SetLoggerError(log::SetLoggerError),
+    // SetLoggerError(tracing::SetLoggerError),
     UuidLength,
     RecvError,
     SendError,
@@ -41,7 +41,7 @@ impl std::error::Error for Error {
             Error::ErasedSerde(ref e) => Some(e),
             Error::RonError(ref e) => Some(e),
             Error::MetaDeError(_, ref e) => Some(e),
-            Error::SetLoggerError(ref e) => Some(e),
+            // Error::SetLoggerError(ref e) => Some(e),
             Error::UuidLength => None,
             Error::RecvError => None,
             Error::SendError => None,
@@ -70,7 +70,7 @@ impl fmt::Display for Error {
                 write!(f, "metadata {} ", path.display())?;
                 e.fmt(f)
             }
-            Error::SetLoggerError(ref e) => e.fmt(f),
+            // Error::SetLoggerError(ref e) => e.fmt(f),
             Error::UuidLength => write!(f, "{}", self),
             Error::RecvError => write!(f, "{}", self),
             Error::SendError => write!(f, "{}", self),
@@ -133,11 +133,11 @@ impl From<Error> for capnp::Error {
         capnp::Error::failed(format!("{}", err))
     }
 }
-impl From<log::SetLoggerError> for Error {
-    fn from(err: log::SetLoggerError) -> Error {
+/*impl From<tracing::SetLoggerError> for Error {
+    fn from(err: tracing::SetLoggerError) -> Error {
         Error::SetLoggerError(err)
     }
-}
+}*/
 impl From<distill_importer::Error> for Error {
     fn from(err: distill_importer::Error) -> Error {
         Error::ImporterError(err)

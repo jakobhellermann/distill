@@ -11,7 +11,7 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use dashmap::DashMap;
 use distill_core::{ArtifactMetadata, AssetMetadata, AssetRef, AssetTypeId, AssetUuid};
 use instant::Instant;
-use log::error;
+use tracing::error;
 
 use crate::{
     io::{DataRequest, LoaderIO, MetadataRequest, MetadataRequestResult, ResolveRequest},
@@ -162,7 +162,7 @@ impl LoaderState {
         } else {
             let new_handle = self.handle_allocator.alloc();
             let new_handle = new_handle.set_indirect();
-            log::trace!(
+            tracing::trace!(
                 "Inserting indirect load for {:?} load handle {:?}",
                 id,
                 new_handle
@@ -187,7 +187,7 @@ impl LoaderState {
         let handle = *self.uuid_to_load.entry(id).or_insert_with(|| {
             let new_handle = self.handle_allocator.alloc();
 
-            log::trace!(
+            tracing::trace!(
                 "Inserting load state for {:?} load handle {:?}",
                 id,
                 new_handle
@@ -475,7 +475,7 @@ impl LoaderState {
                                                 uuid
                                             )
                                             });
-                                        log::debug!("Removing ref from `{:?}`", uuid);
+                                        tracing::debug!("Removing ref from `{:?}`", uuid);
                                         // Remove reference from asset dependency.
                                         self.remove_refs(*dependency_load_handle, 1)
                                     });
@@ -504,7 +504,7 @@ impl LoaderState {
                 entry.value_mut().versions = versions;
                 let time_in_state = last_state_change_instant.elapsed().as_secs_f32();
                 if state_change {
-                    log::debug!(
+                    tracing::debug!(
                         "{:?} {:?} => {:?} in {}s",
                         key,
                         log_old_state.unwrap(),
@@ -514,7 +514,7 @@ impl LoaderState {
 
                     entry.value_mut().last_state_change_instant = Instant::now();
                 } else {
-                    log::trace!(
+                    tracing::trace!(
                         "process_load_states Key: {:?} State: {:?} Time in state: {}",
                         key,
                         entry
@@ -531,7 +531,7 @@ impl LoaderState {
 
             // Uncomment for recursive logging of dependency's load states
             /*
-            if log::log_enabled!(log::Level::Trace) {
+            if tracing::log_enabled!(tracing::Level::Trace) {
                 for entry in load_states.iter() {
                     if entry.value().state == LoadState::WaitingForDependencies {
                         dump_dependencies(&value.asset_id, load_states, uuid_to_load, metadata, 0);
@@ -568,7 +568,7 @@ impl LoaderState {
                             .load_states
                             .get_mut(&load_handle)
                             .expect("uuid in uuid_to_load but not in load_states");
-                        log::trace!(
+                        tracing::trace!(
                             "received metadata for {:?} after {} secs",
                             load.asset_id,
                             load.last_state_change_instant.elapsed().as_secs_f32()
@@ -658,7 +658,7 @@ impl LoaderState {
 
                     let artifact_type = version_load.metadata.as_ref().unwrap().type_id;
                     let asset_id = load.asset_id;
-                    log::trace!("asset data request succeeded for asset {:?}", load.asset_id);
+                    tracing::trace!("asset data request succeeded for asset {:?}", load.asset_id);
                     // We don't want to be holding a lock to the load while calling AssetStorage::update_asset in `load_data`,
                     // so we drop the load ref, and save the state transition as a return value.
                     drop(load);
@@ -734,11 +734,11 @@ impl LoaderState {
         while let Ok(op) = self.op_rx.try_recv() {
             match op {
                 HandleOp::Error(_handle, _version, err) => {
-                    log::error!("load error {}", err);
+                    tracing::error!("load error {}", err);
                     panic!("load error {}", err);
                 }
                 HandleOp::Complete(handle, version) => {
-                    log::debug!("completed load for handle {:?} version {}", handle, version);
+                    tracing::debug!("completed load for handle {:?} version {}", handle, version);
                     let mut load = self
                         .load_states
                         .get_mut(&handle)
@@ -755,7 +755,7 @@ impl LoaderState {
                     }
                 }
                 HandleOp::Drop(handle, version) => {
-                    log::error!(
+                    tracing::error!(
                         "load op dropped without calling complete/error, handle {:?} version {}",
                         handle,
                         version
@@ -773,7 +773,7 @@ impl LoaderState {
     fn process_path_changes(&mut self) {
         let mut changes = HashSet::new();
         while let Ok(path) = self.invalidate_path_rx.try_recv() {
-            log::trace!("process_path_changes invalidate_path_rx path: {:?}", path);
+            tracing::trace!("process_path_changes invalidate_path_rx path: {:?}", path);
             changes.insert(path);
         }
         for entry in self.indirect_to_load.iter() {
@@ -797,7 +797,7 @@ impl LoaderState {
             // if we have no pending hot reloads, poll for new changes
             let mut changes = HashSet::new();
             while let Ok(asset) = self.invalidate_rx.try_recv() {
-                log::trace!("process_asset_changes invalidate_rx asset: {:?}", asset);
+                tracing::trace!("process_asset_changes invalidate_rx asset: {:?}", asset);
                 changes.insert(asset);
             }
             if !changes.is_empty() {
@@ -846,7 +846,7 @@ impl LoaderState {
                     // The asset could have been unloaded by being unreferenced.
                     .unwrap_or(true)
             });
-            log::trace!("reload unfinished");
+            tracing::trace!("reload unfinished");
             if is_finished {
                 for reload in &self.pending_reloads {
                     if let Some((load_handle, mut load)) = self
@@ -865,7 +865,7 @@ impl LoaderState {
                             .find(|v| matches!(v.state, LoadState::LoadedUncommitted))
                             .map(|v| v.version)
                         {
-                            log::trace!("committing version");
+                            tracing::trace!("committing version");
                             // Commit reloaded asset
                             commit_asset(
                                 **load_handle,

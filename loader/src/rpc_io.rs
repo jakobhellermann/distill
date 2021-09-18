@@ -53,18 +53,18 @@ impl RpcRuntime {
             match std::mem::replace(&mut self.connection, InternalConnectionState::None) {
                 InternalConnectionState::Connected(mut conn) => {
                     if let Ok(change) = conn.snapshot_rx.try_recv() {
-                        log::trace!("RpcRuntime check_asset_changes Ok(change)");
+                        tracing::trace!("RpcRuntime check_asset_changes Ok(change)");
                         conn.snapshot = change.snapshot;
                         let mut changed_assets = Vec::new();
                         for asset in change.changed_assets {
-                            log::trace!(
+                            tracing::trace!(
                                 "RpcRuntime check_asset_changes changed asset.id: {:?}",
                                 asset
                             );
                             changed_assets.push(asset);
                         }
                         for asset in change.deleted_assets {
-                            log::trace!(
+                            tracing::trace!(
                                 "RpcRuntime check_asset_changes deleted asset.id: {:?}",
                                 asset
                             );
@@ -100,7 +100,7 @@ impl RpcRuntime {
         self.local
             .spawn(async move {
                 let result = async move {
-                    log::trace!("connecting to {:?}", connection_type);
+                    tracing::trace!("connecting to {:?}", connection_type);
 
                     let (reader, writer) = match connection_type {
                         #[cfg(not(target_arch = "wasm32"))]
@@ -127,7 +127,7 @@ impl RpcRuntime {
                         }
                     };
 
-                    log::trace!("Creating capnp VatNetwork");
+                    tracing::trace!("Creating capnp VatNetwork");
                     let rpc_network = Box::new(twoparty::VatNetwork::new(
                         reader,
                         writer,
@@ -143,11 +143,11 @@ impl RpcRuntime {
                     let _disconnector = rpc_system.get_disconnector();
                     local.spawn(rpc_system).detach();
 
-                    log::trace!("Requesting RPC snapshot..");
+                    tracing::trace!("Requesting RPC snapshot..");
                     let response = hub.get_snapshot_request().send().promise.await?;
 
                     let snapshot = response.get()?.get_snapshot()?;
-                    log::trace!("Received snapshot, registering listener..");
+                    tracing::trace!("Received snapshot, registering listener..");
                     let (snapshot_tx, snapshot_rx) = unbounded();
                     let listener: asset_hub::listener::Client =
                         capnp_rpc::new_client(ListenerImpl {
@@ -161,7 +161,7 @@ impl RpcRuntime {
                         snapshot,
                         snapshot_rx,
                     })?;
-                    log::trace!("Registered listener, done connecting RPC loader.");
+                    tracing::trace!("Registered listener, done connecting RPC loader.");
 
                     Ok(rpc_conn)
                 }
@@ -244,7 +244,7 @@ impl LoaderIO for RpcIO {
 
         match &runtime.connection {
             InternalConnectionState::Error(err) => {
-                log::error!("Error connecting RpcIO: {}", err);
+                tracing::error!("Error connecting RpcIO: {}", err);
                 runtime.connect(self.connection_type.clone());
             }
             InternalConnectionState::None => {
@@ -428,7 +428,7 @@ impl asset_hub::listener::Server for ListenerImpl {
     ) -> Promise<()> {
         let params = pry!(params.get());
         let snapshot = pry!(params.get_snapshot());
-        log::trace!(
+        tracing::trace!(
             "ListenerImpl::update self.snapshot_change: {:?}",
             self.snapshot_change
         );
@@ -452,12 +452,12 @@ impl asset_hub::listener::Server for ListenerImpl {
                     match change.get_event()?.which()? {
                         asset_change_event::ContentUpdateEvent(evt) => {
                             let id = utils::make_array(evt?.get_id()?.get_id()?);
-                            log::trace!("ListenerImpl::update asset_change_event::ContentUpdateEvent(evt) id: {:?}", id);
+                            tracing::trace!("ListenerImpl::update asset_change_event::ContentUpdateEvent(evt) id: {:?}", id);
                             changed_assets.push(id);
                         }
                         asset_change_event::RemoveEvent(evt) => {
                             let id = utils::make_array(evt?.get_id()?.get_id()?);
-                            log::trace!(
+                            tracing::trace!(
                                 "ListenerImpl::update asset_change_event::RemoveEvent(evt) id: {:?}",
                                 id
                             );

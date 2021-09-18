@@ -19,14 +19,10 @@ use distill_schema::{
     data::{self, path_refs, source_metadata},
     parse_db_metadata,
 };
-use futures::{
-    channel::mpsc::{unbounded, UnboundedReceiver},
-    lock::Mutex,
-    stream::StreamExt,
-};
-use log::{debug, error, info};
+use futures::{channel::mpsc::unbounded, lock::Mutex, stream::StreamExt};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
+use tracing::{debug, error, info};
 
 use crate::{
     artifact_cache::ArtifactCache,
@@ -471,7 +467,7 @@ impl FileAssetSource {
                     // Resolve the path into asset with index 0, if it exists
                     assets.into_iter().next()
                 } else {
-                    log::error!(
+                    tracing::error!(
                         "Failed to resolve path {:?} at {:?}: could not find metadata for file",
                         canon_path.to_string_lossy(),
                         source_path.to_string_lossy(),
@@ -669,13 +665,11 @@ impl FileAssetSource {
         id: &AssetUuid,
         scratch_buf: &mut Vec<u8>,
     ) -> Result<(u64, SerializedAssetVec)> {
-        // Find the path the asset is located at
-        log::trace!("regenerate_import_artifact id {:?}", id);
-        let path = self
+        tracing::trace!("regenerate_import_artifact id {:?}", id);
             .get_asset_path(txn, id)
             .ok_or_else(|| Error::Custom("Could not find asset".to_string()))?;
 
-        log::trace!("path of id {:?} is {:?}", id, path);
+        tracing::trace!("path of id {:?} is {:?}", id, path);
         let cache = DBSourceMetadataCache {
             txn,
             file_asset_source: self,
@@ -690,15 +684,15 @@ impl FileAssetSource {
         import.generate_source_metadata(&cache, ImportSource::File(&path));
         import.hash_source();
 
-        log::trace!("Importing source for {:?}", id);
+        tracing::trace!("Importing source for {:?}", id);
         let imported_assets = import.import_source(scratch_buf).await?;
         if let Some(import_op) = imported_assets.import_op {
             // TODO store reported errors and warnings in metadata
             for error in &import_op.errors {
-                log::error!("Import erorr {:?}: {:?}", path, error);
+                tracing::error!("Import error {:?}: {:?}", path, error);
             }
             for warning in &import_op.warnings {
-                log::warn!("Import warning {:?}: {:?}", path, warning);
+                tracing::warn!("Import warning {:?}: {:?}", path, warning);
             }
         }
         let mut context_set = imported_assets
@@ -1003,7 +997,7 @@ impl FileAssetSource {
                 };
                 let mut import = SourcePairImport::new(path_ref_source.clone());
                 if !import.set_importer_from_map(&self.importers) {
-                    log::warn!("failed to set importer from map for path {:?} when updating path ref dependencies", path_ref_source);
+                    tracing::warn!("failed to set importer from map for path {:?} when updating path ref dependencies", path_ref_source);
                 } else {
                     import.generate_source_metadata(&cache, ImportSource::File(&path.clone()));
                     import
@@ -1064,7 +1058,7 @@ impl FileAssetSource {
                             }
                         }
                         Err(err) => {
-                            log::error!("failed to get import result from metadata when updating path ref for asset: {}", err);
+                            tracing::error!("failed to get import result from metadata when updating path ref for asset: {}", err);
                         }
                     }
                 }
@@ -1217,7 +1211,7 @@ impl FileAssetSource {
         };
         let has_changed_paths = !changed_paths.is_empty();
         if has_changed_paths {
-            log::debug!(
+            tracing::debug!(
                 "Found {} paths with importer changes, marking as dirty",
                 changed_paths.len()
             );
@@ -1239,7 +1233,7 @@ impl FileAssetSource {
     fn handle_dirty_files(&self, txn: &mut RwTransaction<'_>) -> HashMap<PathBuf, SourcePair> {
         let dirty_files = self.tracker.read_dirty_files(txn);
         let mut source_meta_pairs: HashMap<PathBuf, SourcePair> = HashMap::new();
-        log::trace!("Found {} dirty files", dirty_files.len());
+        tracing::trace!("Found {} dirty files", dirty_files.len());
 
         if !dirty_files.is_empty() {
             for state in dirty_files.into_iter() {
@@ -1343,10 +1337,10 @@ impl FileAssetSource {
                                 // TODO store reported errors and warnings in metadata
                                 if let Some(import_op) = import_output.import_op {
                                     for error in &import_op.errors {
-                                        log::error!("Import errors {:?}: {:?}", p.source, error);
+                                        tracing::error!("Import errors {:?}: {:?}", p.source, error);
                                     }
                                     for warning in &import_op.warnings {
-                                        log::warn!("Import warning {:?}: {:?}", p.source, warning);
+                                        tracing::warn!("Import warning {:?}: {:?}", p.source, warning);
                                     }
                                 }
                                 // put import artifact in cache if it doesn't have unresolved refs
@@ -1374,7 +1368,7 @@ impl FileAssetSource {
                                                             )
                                                             .map(|dep| dep.expect_uuid()),
                                                     ));
-                                                log::trace!(
+                                                tracing::trace!(
                                                     "caching asset {:?} from file {:?} with hash {:?}",
                                                     asset.metadata.id,
                                                     p.source,
@@ -1382,10 +1376,10 @@ impl FileAssetSource {
                                                 );
                                                 self.artifact_cache.insert(&mut txn, serialized_asset);
                                             } else {
-                                                log::trace!("asset {:?} from file {:?} did not return serialized asset: cannot cache", asset.metadata.id, p.source);
+                                                tracing::trace!("asset {:?} from file {:?} did not return serialized asset: cannot cache", asset.metadata.id, p.source);
                                             }
                                         } else {
-                                            log::trace!("asset {:?} from file {:?} not fully resolved: cannot cache", asset.metadata.id, p.source);
+                                            tracing::trace!("asset {:?} from file {:?} not fully resolved: cannot cache", asset.metadata.id, p.source);
                                         }
                                     }
                                     txn.commit().expect("failed to commit cache txn");
@@ -1434,10 +1428,11 @@ impl FileAssetSource {
                             self.ack_dirty_file_states(&mut txn, &pair);
                         }
                         Err(e) => {
+                            let path = pair.source.as_ref().map(|s| s.path.display().to_string()).unwrap_or_default();
                             error!(
-                                "Error processing pair at {:?}: {}",
-                                pair.source.as_ref().map(|s| &s.path),
-                                e
+                                path=path.as_str(),
+                                "Error processing pair: {}",
+                                e,
                             )
                         }
                     }
@@ -1459,25 +1454,24 @@ impl FileAssetSource {
         let start_time = Instant::now();
         let mut changed_files = Vec::new();
 
-        log::trace!("handle_update acquiring rw txn");
+        tracing::trace!("handle_update acquiring rw txn");
         let mut txn = self.db.rw_txn().await.expect("Failed to open rw txn");
-        log::trace!("handle_update acquired rw txn, checking rename events");
+        tracing::trace!("handle_update acquired rw txn, checking rename events");
 
         // Before reading the filesystem state we need to process rename events.
         // This must be done in the same transaction to guarantee database consistency.
         self.handle_rename_events(&mut txn);
-        log::trace!("handle_update handle_dirty_files");
+        tracing::trace!("handle_update handle_dirty_files");
         let source_meta_pairs = self.handle_dirty_files(&mut txn);
 
         // This looks a little stupid, since there is no `into_values`
         changed_files.extend(source_meta_pairs.into_iter().map(|(_, v)| v));
 
-        log::trace!("handle_update committing");
+        tracing::trace!("handle_update committing");
         txn.commit().expect("Failed to commit txn");
-        log::trace!("handle_update committed");
+        tracing::trace!("handle_update committed");
 
         let hashed_files = hash_files(&changed_files);
-        debug!("Hashed {}", hashed_files.len());
 
         let hashed_files: Vec<HashedSourcePair> = hashed_files
             .into_iter()
@@ -1518,7 +1512,7 @@ impl FileAssetSource {
         let mut update = false;
 
         while let Some(evt) = rx.next().await {
-            log::debug!("Received file tracker event {:?}", evt);
+            tracing::debug!("Received file tracker event {:?}", evt);
             match evt {
                 // It's possible when we start that code changes to the importer require re-importing
                 // assets. (For example, if we bump the importer version number). The start message

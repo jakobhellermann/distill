@@ -293,7 +293,7 @@ impl AssetDaemon {
 
         futures::pin_mut!(service_handle, tracker_handle, asset_source_handle, rx_fuse);
 
-        log::info!("Starting Daemon Loop");
+        tracing::info!("Starting Daemon Loop");
         loop {
             futures::select! {
                 _done = &mut service_handle => panic!("ServiceHandle panicked"),
@@ -302,7 +302,7 @@ impl AssetDaemon {
                 _done = &mut asset_source_handle => panic!("AssetSource panicked"),
                 done = &mut rx_fuse => match done {
                     Ok(_) => {
-                        log::warn!("Shutting Down!");
+                        tracing::warn!("Shutting Down!");
                         shutdown_tracker.stop().await;
                         // shutdown_service.stop().await;
                         // shutdown_asset_source.stop().await;

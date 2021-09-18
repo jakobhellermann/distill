@@ -93,7 +93,7 @@ where
         options: Box<dyn SerdeObj>,
         mut state: Box<dyn SerdeObj>,
     ) -> BoxFuture<'a, Result<BoxedImporterValue>> {
-        log::trace!("import_boxed");
+        tracing::trace!("import_boxed");
         Box::pin(async move {
             let s = state.any_mut().downcast_mut::<S>();
             let s = if let Some(s) = s {
@@ -108,9 +108,9 @@ where
                 panic!("Failed to downcast Importer::Options");
             };
 
-            log::trace!("import_boxed about to import");
+            tracing::trace!("import_boxed about to import");
             let result = self.import(op, source, o, s).await?;
-            log::trace!("import_boxed imported");
+            tracing::trace!("import_boxed imported");
             Ok(BoxedImporterValue {
                 value: result,
                 options,

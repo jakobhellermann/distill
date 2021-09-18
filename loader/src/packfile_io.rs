@@ -154,7 +154,7 @@ impl PackfileReader {
             entry_count += 1;
         }
 
-        log::debug!("Loaded {} asset entries from packfile", entry_count);
+        tracing::debug!("Loaded {} asset entries from packfile", entry_count);
 
         let runtime = bevy_tasks::IoTaskPool(bevy_tasks::TaskPoolBuilder::default().build());
 

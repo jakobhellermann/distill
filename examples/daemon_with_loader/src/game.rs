@@ -61,7 +61,7 @@ impl<A: for<'a> serde::Deserialize<'a>> AssetStorage for Storage<A> {
                 version,
             },
         );
-        log::info!("{} bytes loaded for {:?}", data.len(), load_handle);
+        tracing::info!("{} bytes loaded for {:?}", data.len(), load_handle);
         // The loading process could be async, in which case you can delay
         // calling `load_op.complete` as it should only be done when the asset is usable.
         load_op.complete();
@@ -84,7 +84,7 @@ impl<A: for<'a> serde::Deserialize<'a>> AssetStorage for Storage<A> {
                 .remove(&load_handle)
                 .expect("asset not present when committing"),
         );
-        log::info!("Commit {:?}", load_handle);
+        tracing::info!("Commit {:?}", load_handle);
     }
 
     fn free(&mut self, _asset_type_id: &AssetTypeId, load_handle: LoadHandle, version: u32) {
@@ -98,7 +98,7 @@ impl<A: for<'a> serde::Deserialize<'a>> AssetStorage for Storage<A> {
                 self.assets.remove(&load_handle);
             }
         }
-        log::info!("Free {:?}", load_handle);
+        tracing::info!("Free {:?}", load_handle);
     }
 }
 struct Game {

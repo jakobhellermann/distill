@@ -15,8 +15,8 @@ use distill_importer::{
 };
 use distill_schema::data;
 use futures::future::{BoxFuture, Future};
-use log::{debug, error};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error};
 
 use crate::{
     daemon::ImporterMap,
@@ -606,7 +606,7 @@ impl<'a> SourcePairImport<'a> {
                 ctx,
             )
             .await?;
-        log::info!(
+        tracing::info!(
             "Exported pair in {}",
             Instant::now().duration_since(start_time).as_secs_f32()
         );
@@ -616,7 +616,7 @@ impl<'a> SourcePairImport<'a> {
     // Read the asset from disk, returns an updated PairImportResult (i.e. hash will match the
     // imported data, assets will be refreshed with data from disk)
     pub async fn import_source(&mut self, scratch_buf: &mut Vec<u8>) -> Result<PairImportResult> {
-        log::trace!("import_source importing {:?}", &self.source);
+        tracing::trace!("import_source importing {:?}", &self.source);
         let start_time = Instant::now();
         let importer = self
             .importer
@@ -644,7 +644,7 @@ impl<'a> SourcePairImport<'a> {
                     .await
             })
             .await?;
-        log::trace!("import_source building result {:?}", self.source);
+        tracing::trace!("import_source building result {:?}", self.source);
         let options = imported.options;
         let state = imported.state;
         let imported = imported.value;
@@ -659,7 +659,7 @@ impl<'a> SourcePairImport<'a> {
                 ctx,
             )
             .await?;
-        log::info!(
+        tracing::info!(
             "Imported pair {:?} in {}",
             self.source,
             Instant::now().duration_since(start_time).as_secs_f32()

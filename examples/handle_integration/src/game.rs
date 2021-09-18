@@ -49,7 +49,7 @@ pub fn run() {
         // From the Storage, use the Handle to get a reference to the loaded asset.
         let custom_asset: &BigPerf = handle.asset(&game.storage).expect("failed to get asset");
         // The custom asset has an automatically constructed Handle reference to an Image.
-        log::info!(
+        tracing::info!(
             "Image dependency has handle {:?} from path, and {:?} from UUID",
             custom_asset.handle_made_from_path.load_handle(),
             custom_asset.handle_made_from_uuid.load_handle()

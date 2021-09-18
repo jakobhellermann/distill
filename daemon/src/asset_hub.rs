@@ -378,7 +378,7 @@ impl AssetHub {
             to_check.push_back(id);
         }
         if !to_check.is_empty() {
-            log::info!("{} assets changed content", to_check.len());
+            tracing::info!("{} assets changed content", to_check.len());
         }
         // This find all the "downstream" assets from the changed assets that may be affected by
         // newly imported changes
@@ -454,7 +454,7 @@ impl AssetHub {
             }
         }
         if !events.is_empty() {
-            log::info!("{} asset events generated", events.len());
+            tracing::info!("{} asset events generated", events.len());
         }
         for event in events.iter() {
             add_asset_changelog_entry(&self.tables, txn, event)?;

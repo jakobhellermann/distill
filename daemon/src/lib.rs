@@ -34,17 +34,18 @@ pub use crate::{
     error::{Error, Result},
 };
 
+/*
 #[cfg(debug_assertions)]
-const DEFAULT_LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
+const DEFAULT_LOGGING_LEVEL: tracing::LevelFilter = tracing::LevelFilter::Debug;
 #[cfg(not(debug_assertions))]
-const DEFAULT_LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Info;
+const DEFAULT_LOGGING_LEVEL: tracing::LevelFilter = tracing::LevelFilter::Info;
 
 mod simple_logger {
-    use log::{Level, Metadata, Record};
+    use tracing::{Level, Metadata, Record};
 
     pub struct SimpleLogger;
 
-    impl log::Log for SimpleLogger {
+    impl tracing::Log for SimpleLogger {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool {
             metadata.level() <= Level::Info
         }
@@ -64,17 +65,17 @@ static LOGGER: simple_logger::SimpleLogger = simple_logger::SimpleLogger;
 #[cfg(not(feature = "pretty_log"))]
 pub fn init_logging() -> Result<()> {
     let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "".to_string());
-    let log_level = <log::LevelFilter as std::str::FromStr>::from_str(&rust_log)
+    let log_level = <tracing::LevelFilter as std::str::FromStr>::from_str(&rust_log)
         .unwrap_or(DEFAULT_LOGGING_LEVEL);
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(log_level))
+    tracing::set_logger(&LOGGER)
+        .map(|()| tracing::set_max_level(log_level))
         .map_err(Error::SetLoggerError)
 }
 #[cfg(feature = "pretty_log")]
 pub fn init_logging() -> Result<()> {
     use chrono::Local;
     let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "".to_string());
-    let log_level = <log::LevelFilter as std::str::FromStr>::from_str(&rust_log)
+    let log_level = <tracing::LevelFilter as std::str::FromStr>::from_str(&rust_log)
         .unwrap_or(DEFAULT_LOGGING_LEVEL);
     fern::Dispatch::new()
         .format(|out, message, record| {
@@ -92,3 +93,4 @@ pub fn init_logging() -> Result<()> {
         .apply()?;
     Ok(())
 }
+*/
