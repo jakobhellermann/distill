@@ -270,3 +270,10 @@ impl<T: type_uuid::TypeUuidDynamic> TypeUuidDynamic for T {
 
 #[cfg(feature = "type_uuid")]
 pub use type_uuid;
+
+#[cfg(feature = "bevy_reflect")]
+impl<T: bevy_reflect::TypeUuidDynamic> TypeUuidDynamic for T {
+    fn uuid(&self) -> [u8; 16] {
+        *<Self as bevy_reflect::TypeUuidDynamic>::type_uuid(self).as_bytes()
+    }
+}
