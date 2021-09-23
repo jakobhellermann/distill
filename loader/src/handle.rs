@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     fmt::Debug,
     hash::Hash,
@@ -261,8 +262,15 @@ impl<T: ?Sized> From<Handle<T>> for GenericHandle {
 /// removes reference counting overhead, but also ensures that the system which uses the weak handle
 /// is not in control of when to unload the asset.
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[repr(transparent)]
 pub struct WeakHandle {
     id: LoadHandle,
+}
+impl WeakHandle {
+    fn ref_from_raw(id: &LoadHandle) -> &WeakHandle {
+        // Safety: WeakHandle is #[repr(transparent)]
+        unsafe { std::mem::transmute::<&LoadHandle, &WeakHandle>(id) }
+    }
 }
 
 impl WeakHandle {
@@ -274,6 +282,12 @@ impl WeakHandle {
 impl AssetHandle for WeakHandle {
     fn load_handle(&self) -> LoadHandle {
         self.id
+    }
+}
+
+impl<A> Borrow<WeakHandle> for Handle<A> {
+    fn borrow(&self) -> &WeakHandle {
+        WeakHandle::ref_from_raw(&self.handle_ref.id)
     }
 }
 
