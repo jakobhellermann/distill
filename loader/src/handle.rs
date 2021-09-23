@@ -50,7 +50,7 @@ pub enum HandleRefType {
     /// Strong references decrement the count on drop
     Strong(Sender<RefOp>),
     /// Weak references do nothing on drop.
-    Weak(Sender<RefOp>),
+    Weak,
     /// Internal references do nothing on drop, but turn into Strong references on clone.
     /// Should only be used for references stored in loaded assets to avoid self-referencing
     Internal(Sender<RefOp>),
@@ -85,7 +85,7 @@ impl Drop for HandleRef {
         self.ref_type = match std::mem::replace(&mut self.ref_type, None) {
             Strong(sender) => {
                 let _ = sender.send(RefOp::Decrease(self.id));
-                Weak(sender)
+                Weak
             }
             r => r,
         };
@@ -102,7 +102,7 @@ impl Clone for HandleRef {
                     let _ = sender.send(RefOp::Increase(self.id));
                     Strong(sender.clone())
                 }
-                Weak(sender) => Weak(sender.clone()),
+                Weak => Weak,
                 None => panic!("unexpected ref type in clone()"),
             },
         }
@@ -170,6 +170,20 @@ impl<T> Handle<T> {
             },
             marker: PhantomData,
         }
+    }
+
+    pub fn new_weak(handle: LoadHandle) -> Self {
+        Self {
+            handle_ref: HandleRef {
+                id: handle,
+                ref_type: HandleRefType::Weak,
+            },
+            marker: PhantomData,
+        }
+    }
+
+    pub fn clone_weak(&self) -> Handle<T> {
+        Handle::new_weak(self.load_handle())
     }
 
     /// Creates a new handle with `HandleRefType::Internal`
