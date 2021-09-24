@@ -964,6 +964,16 @@ pub struct Loader {
     data: LoaderState,
 }
 
+impl LoaderInfoProvider for Loader {
+    fn get_load_handle(&self, id: &AssetRef) -> Option<LoadHandle> {
+        self.data.get_load_handle(id)
+    }
+
+    fn get_asset_id(&self, load: LoadHandle) -> Option<AssetUuid> {
+        self.data.get_asset_id(load)
+    }
+}
+
 impl LoaderInfoProvider for LoaderState {
     fn get_load_handle(&self, id: &AssetRef) -> Option<LoadHandle> {
         self.uuid_to_load.get(id.expect_uuid()).map(|l| *l)
