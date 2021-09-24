@@ -451,11 +451,16 @@ where
     SerdeContext::with_active(|loader, _| {
         use ser::SerializeSeq;
         let uuid: AssetUuid = loader.get_asset_id(load).unwrap_or_default();
-        let mut seq = serializer.serialize_seq(Some(uuid.0.len()))?;
-        for element in &uuid.0 {
-            seq.serialize_element(element)?;
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&uuid.to_string())
+        } else {
+            let mut seq = serializer.serialize_seq(Some(uuid.0.len()))?;
+            for element in &uuid.0 {
+                seq.serialize_element(element)?;
+            }
+            seq.end()
         }
-        seq.end()
     })
 }
 impl<T> Serialize for Handle<T> {
