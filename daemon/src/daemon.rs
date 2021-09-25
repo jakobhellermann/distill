@@ -221,7 +221,8 @@ impl AssetDaemon {
             .expect("failed to check daemon version in asset db");
 
         let to_watch = self.asset_dirs.iter().map(|p| p.to_str().unwrap());
-        let tracker = FileTracker::new(asset_db.clone(), to_watch);
+        let (file_events_tx, file_events_rx) = unbounded();
+        let tracker = FileTracker::new(asset_db.clone(), to_watch, file_events_tx);
         let tracker = Arc::new(tracker);
 
         let hub = AssetHub::new(asset_db.clone()).expect("failed to create asset hub");
@@ -279,9 +280,6 @@ impl AssetDaemon {
         let mut service_ws_handle = futures::future::pending::<()>().fuse();
 
         let service_handle = local.spawn(async move { service.run(addr).await }).fuse();
-
-        let (file_events_tx, file_events_rx) = unbounded();
-        tracker.register_listener(file_events_tx);
 
         let asset_source_handle = local
             .spawn(async move { asset_source.run(file_events_rx).await })
