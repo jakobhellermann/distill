@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     cmp::PartialEq,
     collections::{HashMap, HashSet},
     fs,
@@ -18,8 +17,7 @@ use distill_core::utils::{self, canonicalize_path};
 use distill_schema::data::{self, dirty_file_info, rename_file_event, source_file_info, FileType};
 use event_listener::Event;
 use futures::{
-    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
-    lock::Mutex,
+    channel::mpsc::{unbounded, UnboundedSender},
     stream::StreamExt,
     FutureExt,
 };
@@ -62,10 +60,7 @@ pub struct FileTracker {
     // Tabls in the LMDB db
     tables: FileTrackerTables,
 
-    // Channel that allows registering new listeners while running
-    listener_rx: Mutex<Cell<UnboundedReceiver<UnboundedSender<FileTrackerEvent>>>>,
-    listener_tx: UnboundedSender<UnboundedSender<FileTrackerEvent>>,
-
+    file_tracker_event_tx: UnboundedSender<FileTrackerEvent>,
     // Flag indicates we are running, ensures we do not start the task if it's already running
     is_running: AtomicBool,
     // Used to signal the running task to stop
@@ -130,42 +125,6 @@ pub fn db_file_type(t: fs::FileType) -> FileType {
     }
 }
 
-struct ListenersList {
-    listeners: Vec<UnboundedSender<FileTrackerEvent>>,
-}
-
-impl ListenersList {
-    fn new() -> Self {
-        Self {
-            listeners: Vec::new(),
-        }
-    }
-
-    fn register(&mut self, new_listener: Option<UnboundedSender<FileTrackerEvent>>) {
-        if let Some(new_listener) = new_listener {
-            self.listeners.push(new_listener);
-        }
-    }
-
-    fn send_event(&mut self, event: FileTrackerEvent) {
-        self.listeners.retain(|listener| {
-            match listener.unbounded_send(event) {
-                Ok(()) => {
-                    debug!("Sent to listener");
-                    true
-                }
-                // channel was closed, drop the listener
-                Err(_) => {
-                    debug!("Listener dropped");
-                    false
-                }
-            }
-        })
-    }
-}
-
-// Adds a new record to rename_file_events, with the key being a sequence ID (we first read the
-// table to determine latest ID, increment, then write with the new sequence ID)
 fn add_rename_event(
     tables: &FileTrackerTables,
     txn: &mut RwTransaction<'_>,
@@ -449,7 +408,11 @@ mod events {
 
 impl FileTracker {
     // Creates tables in the provided DB, sanitizes passed paths.
-    pub fn new<'a, I, T>(db: Arc<Environment>, to_watch: I) -> FileTracker
+    pub fn new<'a, I, T>(
+        db: Arc<Environment>,
+        to_watch: I,
+        file_tracker_event_tx: UnboundedSender<FileTrackerEvent>,
+    ) -> FileTracker
     where
         I: IntoIterator<Item = &'a str, IntoIter = T>,
         T: Iterator<Item = &'a str>,
@@ -481,8 +444,6 @@ impl FileTracker {
             .create_db(Some("rename_file_events"), lmdb::DatabaseFlags::INTEGER_KEY)
             .expect("db: Failed to create rename_file_events table");
 
-        let (listener_tx, listener_rx) = unbounded();
-
         FileTracker {
             is_running: AtomicBool::new(false),
             stopping_event: Event::new(),
@@ -492,8 +453,7 @@ impl FileTracker {
                 rename_file_events,
             },
             db,
-            listener_rx: Mutex::new(Cell::new(listener_rx)),
-            listener_tx,
+            file_tracker_event_tx,
             watch_dirs: RwLock::new(watch_dirs),
         }
     }
@@ -713,16 +673,9 @@ impl FileTracker {
             })
     }
 
-    pub fn register_listener(&self, sender: UnboundedSender<FileTrackerEvent>) {
-        self.listener_tx
-            .unbounded_send(sender)
-            .expect("Failed registering listener")
-    }
-
     pub async fn stop(&self) {
         if self.is_running() {
             self.stopping_event.notify(std::usize::MAX);
-            self.listener_rx.lock().await;
             assert!(!self.is_running.load(Ordering::Acquire));
         }
     }
@@ -751,17 +704,13 @@ impl FileTracker {
         let stop_handle = watcher.stop_handle();
         thread::spawn(move || watcher.run());
 
-        let mut listeners = ListenersList::new();
         let mut scan_stack = Vec::new();
 
         let stopping = self.stopping_event.listen().fuse();
 
-        let mut listener_rx_guard = self.listener_rx.lock().await;
-
-        let listener_rx = listener_rx_guard.get_mut().fuse();
         let watcher_rx = watcher_rx.fuse();
 
-        futures::pin_mut!(watcher_rx, listener_rx, stopping);
+        futures::pin_mut!(watcher_rx, stopping);
 
         let mut dirty = false;
 
@@ -772,13 +721,12 @@ impl FileTracker {
             futures::pin_mut!(delay);
 
             futures::select! {
-                // Received a new listener, register it
-                new_listener = listener_rx.next() => listeners.register(new_listener),
-
-                // some time has passed since our previous writes to the DB, send the update event
                 _ = delay => {
                     if dirty {
-                        listeners.send_event(FileTrackerEvent::Update);
+                        if let Err(_) = self.file_tracker_event_tx.unbounded_send(FileTrackerEvent::Update) {
+                            debug!("Listener dropped");
+                        }
+
                         dirty = false;
                     }
                 },
@@ -795,7 +743,12 @@ impl FileTracker {
                     // batch watcher events into single transaction and update
                     while let Some(file_event) = maybe_file_event {
                         match events::handle_file_event(&mut txn, &self.tables, file_event, &mut scan_stack, &self.watch_dirs) {
-                            Ok(Some(evt)) => listeners.send_event(evt),
+                            Ok(Some(evt)) => {
+                                debug!("sending file tracker event: {:?}", evt);
+                                if let Err(_) = self.file_tracker_event_tx.unbounded_send(evt) {
+                                    debug!("Listener dropped");
+                                }
+                            },
                             Ok(None) => {},
                             Err(err) => panic!("Error while handling file event: {}", err),
                         }
@@ -819,7 +772,12 @@ impl FileTracker {
             }
         }
 
-        listeners.send_event(FileTrackerEvent::Update);
+        if let Err(_) = self
+            .file_tracker_event_tx
+            .unbounded_send(FileTrackerEvent::Update)
+        {
+            debug!("Listener dropped");
+        }
         drop(stop_handle);
         self.is_running.store(false, Ordering::Release);
     }
@@ -863,9 +821,8 @@ pub mod tests {
                 )
             }),
         );
-        let tracker = Arc::new(FileTracker::new(db, asset_paths));
         let (tx, mut rx) = unbounded();
-        tracker.register_listener(tx);
+        let tracker = Arc::new(FileTracker::new(db, asset_paths, tx));
 
         let tracker_clone = tracker.clone();
 
