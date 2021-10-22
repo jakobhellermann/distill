@@ -277,6 +277,11 @@ impl WeakHandle {
     pub fn new(handle: LoadHandle) -> Self {
         WeakHandle { id: handle }
     }
+
+    pub fn upgrade<T>(self, sender: Sender<RefOp>) -> Handle<T> {
+        let _ = sender.send(RefOp::Increase(self.id));
+        Handle::<T>::new(sender, self.id)
+    }
 }
 
 impl AssetHandle for WeakHandle {
